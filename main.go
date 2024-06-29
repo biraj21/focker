@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 )
 
 const containersDir = "./containers"
@@ -30,6 +31,9 @@ func main() {
 		} else {
 			run([]string{}, command == "_child")
 		}
+
+	case "ps":
+		ps()
 
 	default:
 		log.Fatal("bad command")
@@ -113,6 +117,18 @@ func run(args []string, isChild bool) {
 	}
 
 	abortIfError(cmd.Run(), "cmd.Run()")
+}
+
+func ps() {
+	files, err := os.ReadDir(containersDir)
+	abortIfError(err, "ps(): os.ReadDir()")
+
+	for _, file := range files {
+		fileInfo, err := file.Info()
+		abortIfError(err, "ps(): file.Info()")
+
+		fmt.Println(file.Name(), fileInfo.ModTime().Format(time.UnixDate))
+	}
 }
 
 func abortIfError(err error, label string) {
