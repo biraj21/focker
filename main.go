@@ -14,6 +14,10 @@ import (
 const containersDir = "./containers"
 const rootFsTarball = "./ubuntu-base-22.04-base-amd64.tar.gz"
 
+func init() {
+	abortIfError(os.MkdirAll(containersDir, 0700), "init containersDir")
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("a command is required")
@@ -84,14 +88,12 @@ func run(args []string, isChild bool) {
 		unzipRootFsTarball(rootfsDir, rootFsTarball)
 
 		// set the root directory inside the container to the extracted rootfs
-		abortIfError(syscall.Chroot(rootfsDir), "chroot")
-
-		// set current directory to the new root directory
-		abortIfError(syscall.Chdir("/"), "chdir")
+		// abortIfError(syscall.Chroot(rootfsDir), "chroot")
+		pivotRoot(rootfsDir)
 
 		// set procfs: tell kernel that for this process (& it's children), use this new /proc directory as procfs
-		// first arg can be empty (or anything) because for procfs, the kernal ignores it
-		abortIfError(syscall.Mount("", "/proc", "proc", 0, ""), "mount procfs")
+		// for procfs, first arg can be anything ig because the kernal ignores it (based on chat with claude & my experiments)
+		abortIfError(syscall.Mount("proc", "/proc", "proc", 0, ""), "mount procfs")
 		defer syscall.Unmount("/proc", 0)
 
 		// if we were to configure the above things in the main process, then it would have
@@ -164,4 +166,23 @@ func unzipRootFsTarball(dest string, src string) {
 
 	cmd := exec.Command("tar", []string{"-xzf", src, "-C", dest}...)
 	abortIfError(cmd.Run(), "unzipRootFsTarball(): tar cmd.Run()")
+}
+
+func pivotRoot(newRoot string) {
+	// pivot_root system call requires new_root arg to be a mount point. here's a line from man pages
+	// new_root must be a path to a mount point, but can't be "/".  A path that is not already a mount point can be converted into one by bind mounting the path onto itself.
+	abortIfError(
+		syscall.Mount(newRoot, newRoot, "", syscall.MS_BIND|syscall.MS_REC, ""),
+		"pivotRoot(): syscall.Mount",
+	)
+
+	// put_old must be a subdirectory inside new_root
+	putOld := filepath.Join(newRoot, ".put_old")
+	abortIfError(os.MkdirAll(putOld, 0700), "pivotRoot(): putold os.MkdirAll")
+
+	// call the pivot_root system call to set the root directory inside the container to the extracted rootfs
+	syscall.PivotRoot(newRoot, putOld)
+
+	// set current working directory to the new root directory
+	abortIfError(syscall.Chdir("/"), "chdir")
 }
