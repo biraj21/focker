@@ -15,7 +15,7 @@ const containersDir = "./containers"
 const rootFsTarball = "./ubuntu-base-22.04-base-amd64.tar.gz"
 
 func init() {
-	abortIfError(os.MkdirAll(containersDir, 0700), "init containersDir")
+	exitIfError(os.MkdirAll(containersDir, 0700), "init containersDir")
 }
 
 func main() {
@@ -63,7 +63,7 @@ func run(args []string, isChild bool) {
 		// otherwise we'll run this program itself in a separate process with an internal
 		// _child command and it will be responsible for running user specified command
 		path, err := os.Executable()
-		abortIfError(err, "os.Executable()")
+		exitIfError(err, "os.Executable()")
 		commandName = path
 		commandArgs = append(commandArgs, "_child")
 		commandArgs = append(commandArgs, args...)
@@ -81,7 +81,7 @@ func run(args []string, isChild bool) {
 		containerId := "b-" + randomString(16)
 
 		// set hostname inside container to a random string
-		abortIfError(syscall.Sethostname([]byte(containerId)), "set hostname")
+		exitIfError(syscall.Sethostname([]byte(containerId)), "set hostname")
 
 		// extract the rootfs tarball
 		rootfsDir := filepath.Join(containersDir, containerId)
@@ -93,7 +93,7 @@ func run(args []string, isChild bool) {
 
 		// set procfs: tell kernel that for this process (& it's children), use this new /proc directory as procfs
 		// for procfs, first arg can be anything ig because the kernal ignores it (based on chat with claude & my experiments)
-		abortIfError(syscall.Mount("proc", "/proc", "proc", 0, ""), "mount procfs")
+		exitIfError(syscall.Mount("proc", "/proc", "proc", 0, ""), "mount procfs")
 		defer syscall.Unmount("/proc", 0)
 
 		// if we were to configure the above things in the main process, then it would have
@@ -118,22 +118,22 @@ func run(args []string, isChild bool) {
 		}
 	}
 
-	abortIfError(cmd.Run(), "cmd.Run()")
+	exitIfError(cmd.Run(), "cmd.Run()")
 }
 
 func ps() {
 	files, err := os.ReadDir(containersDir)
-	abortIfError(err, "ps(): os.ReadDir()")
+	exitIfError(err, "ps(): os.ReadDir()")
 
 	for _, file := range files {
 		fileInfo, err := file.Info()
-		abortIfError(err, "ps(): file.Info()")
+		exitIfError(err, "ps(): file.Info()")
 
 		fmt.Println(file.Name(), fileInfo.ModTime().Format(time.UnixDate))
 	}
 }
 
-func abortIfError(err error, label string) {
+func exitIfError(err error, label string) {
 	if err != nil {
 		if len(label) > 0 {
 			log.Fatal(label, ": ", err)
@@ -162,27 +162,27 @@ func randomString(length int) string {
 }
 
 func unzipRootFsTarball(dest string, src string) {
-	abortIfError(os.MkdirAll(dest, 0700), "unzipRootFsTarball(): os.MkdirAll()")
+	exitIfError(os.MkdirAll(dest, 0700), "unzipRootFsTarball(): os.MkdirAll()")
 
 	cmd := exec.Command("tar", []string{"-xzf", src, "-C", dest}...)
-	abortIfError(cmd.Run(), "unzipRootFsTarball(): tar cmd.Run()")
+	exitIfError(cmd.Run(), "unzipRootFsTarball(): tar cmd.Run()")
 }
 
 func pivotRoot(newRoot string) {
 	// pivot_root system call requires new_root arg to be a mount point. here's a line from man pages
 	// new_root must be a path to a mount point, but can't be "/".  A path that is not already a mount point can be converted into one by bind mounting the path onto itself.
-	abortIfError(
+	exitIfError(
 		syscall.Mount(newRoot, newRoot, "", syscall.MS_BIND|syscall.MS_REC, ""),
 		"pivotRoot(): syscall.Mount",
 	)
 
 	// put_old must be a subdirectory inside new_root
 	putOld := filepath.Join(newRoot, ".put_old")
-	abortIfError(os.MkdirAll(putOld, 0700), "pivotRoot(): putold os.MkdirAll")
+	exitIfError(os.MkdirAll(putOld, 0700), "pivotRoot(): putold os.MkdirAll")
 
-	// call the pivot_root system call to set the root directory inside the container to the extracted rootfs
-	syscall.PivotRoot(newRoot, putOld)
+	// use pivot_root system call to set the root directory inside the container to the extracted rootfs
+	exitIfError(syscall.PivotRoot(newRoot, putOld), "pivotRoot(): pivot_root")
 
 	// set current working directory to the new root directory
-	abortIfError(syscall.Chdir("/"), "chdir")
+	exitIfError(syscall.Chdir("/"), "chdir")
 }
