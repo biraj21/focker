@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -30,11 +31,20 @@ func main() {
 		// in which we will actually run the command. so we first create a container and then inside
 		// it we run the command that user specified
 
+		var volumes []string
+		var args []string
+
 		if len(os.Args) > 2 {
-			run(os.Args[2:], command == "_child")
-		} else {
-			run([]string{}, command == "_child")
+			for _, arg := range os.Args[2:] {
+				if strings.HasPrefix(arg, "-v=") {
+					volumes = append(volumes, strings.TrimPrefix(arg, "-v="))
+				} else {
+					args = append(args, arg)
+				}
+			}
 		}
+
+		run(args, volumes, command == "_child")
 
 	case "ps":
 		ps()
@@ -44,7 +54,7 @@ func main() {
 	}
 }
 
-func run(args []string, isChild bool) {
+func run(args []string, volumes []string, isChild bool) {
 	if len(args) == 0 {
 		log.Fatal("at least 1 argument is required")
 	}
@@ -66,6 +76,17 @@ func run(args []string, isChild bool) {
 		exitIfError(err, "os.Executable()")
 		commandName = path
 		commandArgs = append(commandArgs, "_child")
+
+		// pass the volumes again with -v= add command-line arguments
+		if len(volumes) > 0 {
+			volumeArgs := make([]string, len(volumes))
+			for i, vol := range volumes {
+				volumeArgs[i] = "-v=" + vol
+			}
+
+			commandArgs = append(commandArgs, volumeArgs...)
+		}
+
 		commandArgs = append(commandArgs, args...)
 	}
 
@@ -86,6 +107,33 @@ func run(args []string, isChild bool) {
 		// extract the rootfs tarball
 		rootfsDir := filepath.Join(containersDir, containerId)
 		unzipRootFsTarball(rootfsDir, rootFsTarball)
+
+		// map volumes to share storage between host & container
+		mountedVolumes := make([]string, len(volumes))
+		for i, volume := range volumes {
+			parts := strings.Split(volume, ":")
+			if len(parts) != 2 {
+				log.Fatalf("invalid volume mapping: %s", volume)
+			}
+
+			source := parts[0]
+			target := filepath.Join(rootfsDir, parts[1])
+
+			exitIfError(os.MkdirAll(target, 0700), "mkdir target")
+			exitIfError(syscall.Mount(source, target, "", syscall.MS_BIND|syscall.MS_REC, ""), "mount volume")
+
+			// add to the list of mounted volumes
+			mountedVolumes[i] = parts[1]
+		}
+
+		// defer the unmounting of all volumes
+		defer func() {
+			for _, target := range mountedVolumes {
+				if err := syscall.Unmount(target, 0); err != nil {
+					log.Printf("failed to unmount %s: %v", target, err)
+				}
+			}
+		}()
 
 		// set the root directory inside the container to the extracted rootfs
 		// abortIfError(syscall.Chroot(rootfsDir), "chroot")

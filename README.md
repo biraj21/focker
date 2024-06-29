@@ -7,6 +7,7 @@ Focker is a toy container runtime written in Go, designed to create and manage l
 - Namespace Isolation: Uses Linux namespaces to isolate processes, mount points, and hostname.
 - Filesystem Handling: Extracts a base Ubuntu 22.04 filesystem tarball for container use.
 - Process Management: Runs specified commands inside isolated containers.
+- Volumes: Easy file and directory sharing between host and containers, akin to Docker volumes.
 
 ## Requirements
 
