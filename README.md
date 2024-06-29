@@ -26,3 +26,9 @@ Focker is a toy container runtime written in Go, designed to create and manage l
    ```bash
    sudo ./focker run <command> [args...]
    ```
+
+## Resources
+
+- [Containers From Scratch • Liz Rice • GOTO 2018](https://www.youtube.com/watch?v=8fi7uSYlOdc)
+- [Ubuntu 22.04 Base (rootfs)](https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/)
+- [pivot_root(2) — Linux manual page](https://man7.org/linux/man-pages/man2/pivot_root.2.html)
