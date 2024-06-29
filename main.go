@@ -77,10 +77,9 @@ func run(args []string, isChild bool) {
 
 		// extract the rootfs tarball
 		rootfsDir := filepath.Join(containersDir, containerId)
-		fmt.Println("", rootfsDir)
 		unzipRootFsTarball(rootfsDir, rootFsTarball)
 
-		// set the root directory inside the container (to debian bookworm's rootfs)
+		// set the root directory inside the container to the extracted rootfs
 		abortIfError(syscall.Chroot(rootfsDir), "chroot")
 
 		// set current directory to the new root directory
@@ -118,7 +117,11 @@ func run(args []string, isChild bool) {
 
 func abortIfError(err error, label string) {
 	if err != nil {
-		log.Fatal(label, err)
+		if len(label) > 0 {
+			log.Fatal(label, ": ", err)
+		} else {
+			log.Fatal(err)
+		}
 	}
 }
 
