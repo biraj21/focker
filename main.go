@@ -27,7 +27,7 @@ func main() {
 	command := os.Args[1]
 	switch command {
 	case "run", "_child":
-		// the run command will just init a new isolated process i.e the container with _child command,
+		// the run command will just init a new isolated process (i.e the container) with _child command,
 		// in which we will actually run the command. so we first create a container and then inside
 		// it we run the command that user specified
 
@@ -166,7 +166,12 @@ func run(args []string, volumes []string, isChild bool) {
 		}
 	}
 
-	exitIfError(cmd.Run(), "cmd.Run()")
+	err := cmd.Run()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+
+	os.Exit(cmd.ProcessState.ExitCode())
 }
 
 func ps() {
